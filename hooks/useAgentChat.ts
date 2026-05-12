@@ -252,7 +252,7 @@ export function useAgentChat() {
           createdAt: k.createdAt,
         })),
         recentTasks: tasks
-          .filter((t) => t.status === "success" && t.completedAt)
+          .filter((t) => t.status === "completed" && t.completedAt)
           .slice(0, 5)
           .map((t) => ({
             providerName: t.selectedProvider?.name ?? "Unknown",
