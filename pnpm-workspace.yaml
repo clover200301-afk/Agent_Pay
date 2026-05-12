@@ -1,0 +1,14 @@
+# pnpm 11 引入了 verifyDepsBeforeRun 默认开启的依赖校验，遇到没有显式 allow
+# 的 native build script 会让 `pnpm dev` 直接退出。
+#
+# 显式声明：以下 4 个 native 加速依赖**不需要**运行 build script——它们都是
+# Web3 / Next.js 生态的**可选**原生加速路径（ws 的二进制 codec、ethereumjs 的
+# native hash、next/image 的 sharp），关掉不影响任何功能。
+allowBuilds:
+  bufferutil: false
+  keccak: false
+  sharp: false
+  utf-8-validate: false
+
+# 关闭"运行 script 前校验依赖状态"——避免 ignored builds 触发 pnpm 退出。
+verifyDepsBeforeRun: false
