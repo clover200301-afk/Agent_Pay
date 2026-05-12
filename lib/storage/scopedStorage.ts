@@ -41,22 +41,31 @@ export function scopedName(base: string) {
 
 /**
  * zustand `storage` option that reads / writes localStorage but never throws
- * during SSR (where window is undefined). We return JSONStorage so partialize
+ * during SSR (where window is undefined). Returns JSONStorage so partialize
  * still works as expected.
+ *
+ * We lazily create the storage to avoid zustand's `createJSONStorage`
+ * referencing `indexedDB` at module-evaluation time during SSR.
  */
-export const safeJsonStorage = createJSONStorage<unknown>(() => {
-  if (typeof window === "undefined") {
-    const memory: Record<string, string> = {};
-    const stub: StateStorage = {
-      getItem: (k) => memory[k] ?? null,
-      setItem: (k, v) => {
-        memory[k] = v;
-      },
-      removeItem: (k) => {
-        delete memory[k];
-      },
-    };
-    return stub;
-  }
-  return window.localStorage;
-});
+let _storage: ReturnType<typeof createJSONStorage<unknown>> | undefined;
+
+export function safeJsonStorage() {
+  if (_storage) return _storage;
+  _storage = createJSONStorage<unknown>(() => {
+    if (typeof window === "undefined") {
+      const memory: Record<string, string> = {};
+      const stub: StateStorage = {
+        getItem: (k) => memory[k] ?? null,
+        setItem: (k, v) => {
+          memory[k] = v;
+        },
+        removeItem: (k) => {
+          delete memory[k];
+        },
+      };
+      return stub;
+    }
+    return window.localStorage;
+  });
+  return _storage;
+}

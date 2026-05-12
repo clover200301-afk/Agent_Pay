@@ -22,4 +22,5 @@ export type WorkflowState =
   | "awaiting_approval"
   | "paying"
   | "success"
+  | "issue_failed"
   | "rejected";

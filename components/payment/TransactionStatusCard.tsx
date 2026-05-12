@@ -1,7 +1,16 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ExternalLink, Copy, Key, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ExternalLink,
+  Copy,
+  Key,
+  Loader2,
+  RotateCw,
+} from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +27,8 @@ export function TransactionStatusCard({ task }: { task?: Task } = {}) {
   const liveWorkflowState = useAppStore((s) => s.workflowState);
   const liveTxHash = useAppStore((s) => s.txHash);
   const liveApiKey = useAppStore((s) => s.apiKey);
-  const { status, hash } = usePayment();
+  const { status, retryIssueKey } = usePayment();
+  const [retrying, setRetrying] = useState(false);
 
   const reviewMode = !!task;
   const workflowState = reviewMode
@@ -31,16 +41,23 @@ export function TransactionStatusCard({ task }: { task?: Task } = {}) {
   const txHash = reviewMode ? task!.txHash : liveTxHash;
   const apiKey = reviewMode ? task!.apiKey : liveApiKey;
 
-  const showHash = txHash ?? (reviewMode ? undefined : hash);
-  const visible = workflowState === "paying" || workflowState === "success";
+  const showHash = txHash;
+  const visible =
+    workflowState === "paying" ||
+    workflowState === "success" ||
+    workflowState === "issue_failed";
   if (!visible) return null;
 
-  const phase: "pending" | "confirming" | "success" =
-    workflowState === "success"
+  const phase: "pending" | "confirming" | "success" | "issue_failed" =
+    workflowState === "issue_failed"
+      ? "issue_failed"
+      : workflowState === "success"
       ? "success"
       : reviewMode
       ? "pending"
-      : status === "confirming"
+      : status === "approve_confirming" ||
+        status === "pay_confirming" ||
+        status === "verifying"
       ? "confirming"
       : "pending";
 
@@ -53,6 +70,16 @@ export function TransactionStatusCard({ task }: { task?: Task } = {}) {
     if (!showHash) return;
     await navigator.clipboard.writeText(showHash);
     toast.success(t.tx.txHashCopied);
+  };
+  const onRetry = async () => {
+    setRetrying(true);
+    try {
+      await retryIssueKey();
+    } catch {
+      // toast already fired by usePayment
+    } finally {
+      setRetrying(false);
+    }
   };
 
   return (
@@ -74,6 +101,8 @@ export function TransactionStatusCard({ task }: { task?: Task } = {}) {
             <div className="text-[14px] font-medium tracking-tight">
               {phase === "success"
                 ? t.tx.statusSuccess
+                : phase === "issue_failed"
+                ? t.tx.statusSuccess
                 : phase === "confirming"
                 ? t.tx.statusConfirming
                 : t.tx.statusPending}
@@ -84,7 +113,9 @@ export function TransactionStatusCard({ task }: { task?: Task } = {}) {
               variant={phase === "success" ? "success" : "outline"}
               className="px-2 py-0.5"
             >
-              {phase === "success" ? t.tx.badgeSuccess : t.tx.badgePending}
+              {phase === "success" || phase === "issue_failed"
+                ? t.tx.badgeSuccess
+                : t.tx.badgePending}
             </Badge>
           </div>
         </div>
@@ -149,17 +180,77 @@ export function TransactionStatusCard({ task }: { task?: Task } = {}) {
               </div>
             </motion.div>
           )}
+
+          {phase === "issue_failed" && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              <Separator className="my-5" />
+              <div className="rounded-[12px] border border-[#fde68a] bg-[#fffbeb] p-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f5a623] text-white">
+                    <AlertTriangle className="h-3 w-3" />
+                  </div>
+                  <div className="text-[12px] font-medium tracking-tight text-[#7a4f0a]">
+                    {t.tx.issueFailedTitle}
+                  </div>
+                </div>
+                <div className="mt-2 text-[11px] leading-tight text-[#7a4f0a]/80">
+                  {t.tx.issueFailedDesc}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={onRetry}
+                    disabled={retrying || reviewMode}
+                    className="flex-1"
+                  >
+                    <RotateCw
+                      className={`h-3 w-3 ${retrying ? "animate-spin" : ""}`}
+                    />
+                    {t.tx.issueFailedRetry}
+                  </Button>
+                  {showHash && (
+                    <a
+                      href={`${EXPLORER_URL}/tx/${showHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1"
+                    >
+                      <Button variant="ghost" size="sm" className="w-full">
+                        <ExternalLink className="h-3 w-3" />
+                        {t.tx.issueFailedSupport}
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </motion.div>
     </AnimatePresence>
   );
 }
 
-function PhaseIcon({ phase }: { phase: "pending" | "confirming" | "success" }) {
+function PhaseIcon({
+  phase,
+}: {
+  phase: "pending" | "confirming" | "success" | "issue_failed";
+}) {
   if (phase === "success")
     return (
       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0ea56b] text-white">
         <Check className="h-3.5 w-3.5" strokeWidth={3} />
+      </div>
+    );
+  if (phase === "issue_failed")
+    return (
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f5a623] text-white">
+        <AlertTriangle className="h-3.5 w-3.5" strokeWidth={3} />
       </div>
     );
   return (

@@ -2,46 +2,83 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck, X } from "lucide-react";
+import { useAccount, useReadContract } from "wagmi";
+import { parseUnits, formatUnits } from "viem";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAppStore } from "@/stores/useAppStore";
-import { MOCK_PROVIDERS } from "@/lib/mock/providers";
 import { usePayment } from "@/hooks/usePayment";
 import { useT } from "@/lib/i18n/context";
+import {
+  ERC20_ABI,
+  USDC_DECIMALS,
+  USDC_TO_MON_BASE_SCALE,
+  getUsdcAddress,
+} from "@/lib/contract";
 import type { Task } from "@/types/task";
 
 export function PaymentApprovalCard({ task }: { task?: Task } = {}) {
   const t = useT();
   const workflowState = useAppStore((s) => s.workflowState);
-  const selectedProviderId = useAppStore((s) => s.selectedProviderId);
+  const paymentIntent = useAppStore((s) => s.paymentIntent);
+  const { address } = useAccount();
   const { approve, reject, status } = usePayment();
 
   // Two modes: live workflow OR history review of a completed task.
   const reviewMode = !!task;
-  const provider = reviewMode
+
+  // Source of truth: live mode reads from paymentIntent (set by the agent's
+  // proposePayment tool or the mock workflow); review mode reads from the
+  // persisted task record.
+  const display = reviewMode
     ? task!.selectedProvider
-    : MOCK_PROVIDERS.find((p) => p.id === selectedProviderId);
+      ? {
+          providerName: task!.selectedProvider.name,
+          amountUsdc: task!.selectedProvider.priceUsdc,
+          reason: task!.selectedProvider.tagline,
+        }
+      : undefined
+    : paymentIntent
+    ? {
+        providerName: paymentIntent.providerName,
+        amountUsdc: paymentIntent.amountUsdc,
+        reason: paymentIntent.reason,
+      }
+    : undefined;
+
+  // Look up the wallet's USDC balance so the card can preview which path the
+  // approve action will take (USDC if balance covers it, else native MON).
+  const amountUsdcRaw = display
+    ? parseUnits(display.amountUsdc.toString(), USDC_DECIMALS)
+    : 0n;
+  const { data: usdcBalance } = useReadContract({
+    abi: ERC20_ABI,
+    address: getUsdcAddress(),
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && !reviewMode },
+  });
+  const willUseUsdc =
+    !reviewMode && usdcBalance !== undefined && usdcBalance >= amountUsdcRaw;
+  const willUseMon = !reviewMode && !willUseUsdc && !!address;
+  const amountMonDisplay = display
+    ? formatUnits(amountUsdcRaw * USDC_TO_MON_BASE_SCALE, 18)
+    : "0";
 
   const visible = reviewMode
-    ? !!provider
-    : workflowState === "awaiting_approval" ||
-      workflowState === "paying" ||
-      (workflowState === "running" && !!provider);
+    ? !!display
+    : !!display &&
+      (workflowState === "awaiting_approval" ||
+        workflowState === "paying" ||
+        workflowState === "running");
 
   const enabled =
     !reviewMode && workflowState === "awaiting_approval" && status === "idle";
 
-  const taglineFor = (id: string | undefined) => {
-    if (id === "vision-api") return t.providers.visionTagline;
-    if (id === "image-forge") return t.providers.forgeTagline;
-    if (id === "pixel-mind") return t.providers.pixelTagline;
-    return "";
-  };
-
   return (
     <AnimatePresence>
-      {visible && provider && (
+      {visible && display && (
         <motion.div
           key="approval"
           initial={{ opacity: 0, y: 14, scale: 0.98 }}
@@ -65,16 +102,32 @@ export function PaymentApprovalCard({ task }: { task?: Task } = {}) {
           </div>
 
           <div className="mt-5 space-y-3">
-            <Row label={t.payment.service} value={provider.name} hint={taglineFor(provider.id)} />
+            <Row
+              label={t.payment.service}
+              value={display.providerName}
+              hint={display.reason}
+            />
             <Row
               label={t.payment.price}
               value={
                 <span className="tnum">
-                  {provider.priceUsdc.toFixed(2)}
+                  {display.amountUsdc.toFixed(2)}
                   <span className="ml-1 text-[11px] text-[#666666]">USDC</span>
                 </span>
               }
             />
+            {willUseMon && (
+              <Row
+                label={t.payment.method}
+                value={
+                  <span className="tnum">
+                    ≈ {amountMonDisplay}
+                    <span className="ml-1 text-[11px] text-[#666666]">MON</span>
+                  </span>
+                }
+                hint={t.payment.monFallbackHint}
+              />
+            )}
             <Row
               label={t.payment.network}
               value={
@@ -104,9 +157,9 @@ export function PaymentApprovalCard({ task }: { task?: Task } = {}) {
               className="flex-[2]"
               size="md"
               disabled={!enabled}
-              onClick={() => approve(`task_${Date.now()}`)}
+              onClick={() => approve()}
             >
-              {status === "pending" || status === "confirming"
+              {status !== "idle" && status !== "error"
                 ? t.payment.confirming
                 : t.payment.approveBtn}
             </Button>

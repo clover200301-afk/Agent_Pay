@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowUp, Sparkles, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkflow } from "@/hooks/useWorkflow";
+import { useAgentChat } from "@/hooks/useAgentChat";
 import { useAppStore } from "@/stores/useAppStore";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
@@ -14,11 +15,15 @@ export function ChatInput() {
   const t = useT();
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
-  const { start } = useWorkflow();
+  const { start: mockStart } = useWorkflow();
+  const agentChat = useAgentChat();
   const workflowState = useAppStore((s) => s.workflowState);
   const isRunning = workflowState !== "idle" && workflowState !== "rejected";
   const hasModelKey = useHasAnyModelKey();
   const disabled = isRunning || !hasModelKey;
+
+  // Use real agent when available, fall back to mock workflow
+  const useRealAgent = agentChat.isAvailable;
 
   const EXAMPLE_PROMPTS = [
     t.chat.examples.cheapestImage,
@@ -38,11 +43,16 @@ export function ChatInput() {
     if (workflowState === "idle") setValue("");
   }, [workflowState]);
 
-  const submit = (text: string) => {
+  const submit = async (text: string) => {
     const tt = text.trim();
     if (!tt || disabled) return;
     setValue(tt);
-    void start(tt);
+    if (useRealAgent) {
+      const ok = await agentChat.start(tt);
+      if (!ok) void mockStart(tt); // fallback
+    } else {
+      void mockStart(tt);
+    }
   };
 
   const placeholder = !hasModelKey

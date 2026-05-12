@@ -39,3 +39,21 @@ export function generateApiKey(prefix = "vsk_live") {
 export function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
+
+/**
+ * Build a bytes32 task reference used as the on-chain `taskId`. Stable per
+ * call (timestamp + random). Output is `0x` + 64 hex chars.
+ *
+ * Shared between the agent (`lib/agent/tools.ts`) and the mock workflow
+ * (`hooks/useWorkflow.ts`) so both paths emit the same shape.
+ */
+export function buildTaskRef(providerId: string): string {
+  const stamp = Date.now().toString(16);
+  const rand = Math.random().toString(16).slice(2, 10);
+  const raw = `${providerId}-${stamp}-${rand}`;
+  let hex = "";
+  for (let i = 0; i < raw.length; i++) {
+    hex += raw.charCodeAt(i).toString(16).padStart(2, "0");
+  }
+  return ("0x" + hex.padEnd(64, "0")).slice(0, 66);
+}

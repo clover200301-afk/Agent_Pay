@@ -5,6 +5,8 @@ import {
   findAgentProvider,
   type AgentProvider,
 } from "@/lib/agent/providers";
+import { buildTaskRef } from "@/lib/utils";
+import type { PaymentIntent } from "@/stores/useAppStore";
 
 /**
  * Tool implementations for the agent. Each tool corresponds to one step in
@@ -73,16 +75,6 @@ export const proposePaymentSchema = z.object({
     .describe("One-sentence rationale shown to the user above the payment panel."),
 });
 
-export interface PaymentIntent {
-  providerId: string;
-  providerName: string;
-  amountUsdc: number;
-  recipient: string;
-  reason: string;
-  /** Hex-encoded bytes32 used as the on-chain taskId. Stable per intent. */
-  taskRef: string;
-}
-
 export function proposePayment(
   args: z.infer<typeof proposePaymentSchema>,
 ): { ok: true; intent: PaymentIntent } | { ok: false; error: string } {
@@ -101,17 +93,6 @@ export function proposePayment(
   };
 
   return { ok: true, intent };
-}
-
-function buildTaskRef(providerId: string): string {
-  const stamp = Date.now().toString(16);
-  const rand = Math.random().toString(16).slice(2, 10);
-  const raw = `${providerId}-${stamp}-${rand}`;
-  let hex = "";
-  for (let i = 0; i < raw.length; i++) {
-    hex += raw.charCodeAt(i).toString(16).padStart(2, "0");
-  }
-  return ("0x" + hex.padEnd(64, "0")).slice(0, 66);
 }
 
 /** Names exported so server + client agree on the tool identifiers. */

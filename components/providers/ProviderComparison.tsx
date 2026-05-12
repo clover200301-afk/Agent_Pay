@@ -2,30 +2,31 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Star } from "lucide-react";
-import { MOCK_PROVIDERS } from "@/lib/mock/providers";
+import { pickShortlist } from "@/lib/providers/catalog";
 import { useAppStore } from "@/stores/useAppStore";
 import { useT } from "@/lib/i18n/context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useMemo } from "react";
 
 export function ProviderComparison() {
   const t = useT();
   const workflowState = useAppStore((s) => s.workflowState);
   const activeIndex = useAppStore((s) => s.activeStepIndex);
   const selectedProviderId = useAppStore((s) => s.selectedProviderId);
+  const currentPrompt = useAppStore((s) => s.currentPrompt);
+
+  // Pick the same 3-provider shortlist the workflow uses so the "Selected"
+  // tag here always matches the one PaymentApprovalCard receives.
+  const providers = useMemo(
+    () => pickShortlist(currentPrompt),
+    [currentPrompt],
+  );
 
   if (workflowState === "idle") return null;
 
   const revealed = activeIndex >= 2;
   const showSkeleton = !revealed;
-
-  // i18n for taglines + badge
-  const taglineFor = (id: string) => {
-    if (id === "vision-api") return t.providers.visionTagline;
-    if (id === "image-forge") return t.providers.forgeTagline;
-    if (id === "pixel-mind") return t.providers.pixelTagline;
-    return "";
-  };
 
   return (
     <motion.div
@@ -68,7 +69,7 @@ export function ProviderComparison() {
             }}
             className="grid grid-cols-1 gap-3 md:grid-cols-3"
           >
-            {MOCK_PROVIDERS.map((p) => {
+            {providers.map((p) => {
               const selected = p.id === selectedProviderId;
               return (
                 <motion.div
@@ -96,12 +97,12 @@ export function ProviderComparison() {
                     <div className="text-[14.5px] font-medium tracking-tight">{p.name}</div>
                     {p.badge && !selected && (
                       <span className="text-[10px] tracking-tight text-[#666666]">
-                        {t.providers.badgeTopRated}
+                        {p.badge}
                       </span>
                     )}
                   </div>
                   <div className="mt-1 text-[11.5px] leading-tight text-[#666666]">
-                    {taglineFor(p.id)}
+                    {p.tagline}
                   </div>
                   <div className="mt-4 flex items-baseline gap-1">
                     <span className="tnum text-[22px] font-medium leading-none tracking-[-0.02em]">

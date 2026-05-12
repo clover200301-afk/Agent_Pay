@@ -99,6 +99,16 @@ export const USDC_ADDRESS_FALLBACK: Address =
 
 export const USDC_DECIMALS = 6;
 
+/**
+ * Fallback exchange rate when the wallet has no test USDC: pay in native MON
+ * instead of USDC. 1 USDC base unit (6 decimals) maps to 1e10 wei of MON
+ * (18 decimals) — i.e. 1 USDC = 0.01 MON. Demo-only mock pricing.
+ */
+export const USDC_TO_MON_BASE_SCALE = 10_000_000_000n;
+export const ZERO_ADDRESS: Address = "0x0000000000000000000000000000000000000000";
+
+export type PaymentMode = "usdc" | "mon";
+
 export function getAgentPayAddress(): Address | undefined {
   const a = process.env.NEXT_PUBLIC_AGENTPAY_ADDRESS;
   if (!a || !/^0x[a-fA-F0-9]{40}$/.test(a)) return undefined;

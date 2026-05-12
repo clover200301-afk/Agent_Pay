@@ -37,7 +37,7 @@ export const useModelKeysStore = create<ModelKeysState>()(
     }),
     {
       name: scopedName(MODEL_KEYS_STORE_BASE),
-      storage: safeJsonStorage as never,
+      storage: safeJsonStorage() as never,
       partialize: (s) => ({ keys: s.keys }),
     }
   )

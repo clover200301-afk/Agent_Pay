@@ -36,7 +36,7 @@ export const useApiKeysStore = create<ApiKeysState>()(
     }),
     {
       name: scopedName(API_KEYS_STORE_BASE),
-      storage: safeJsonStorage as never,
+      storage: safeJsonStorage() as never,
       partialize: (s) => ({ keys: s.keys }),
     }
   )

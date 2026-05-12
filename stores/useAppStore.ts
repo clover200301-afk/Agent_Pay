@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 import type { Provider } from "@/types/provider";
 import type { Task } from "@/types/task";
 import type { WorkflowState } from "@/types/workflow";
+import type { PaymentMode } from "@/lib/contract";
 import {
   safeJsonStorage,
   scopedName,
@@ -50,9 +51,15 @@ interface AppState {
   approveTxHash?: string;
   txHash?: string;
   apiKey?: string;
+  /**
+   * Which on-chain path the active payment took. Set by usePayment right
+   * after balance check, so the UI can show "Paid in MON (USDC fallback)".
+   */
+  paymentMode?: PaymentMode;
   setApproveTxHash: (h?: string) => void;
   setTxHash: (h?: string) => void;
   setApiKey: (k?: string) => void;
+  setPaymentMode: (m?: PaymentMode) => void;
 
   // tasks
   tasks: Task[];
@@ -89,9 +96,11 @@ export const useAppStore = create<AppState>()(
       approveTxHash: undefined,
       txHash: undefined,
       apiKey: undefined,
+      paymentMode: undefined,
       setApproveTxHash: (h) => set({ approveTxHash: h }),
       setTxHash: (h) => set({ txHash: h }),
       setApiKey: (k) => set({ apiKey: k }),
+      setPaymentMode: (m) => set({ paymentMode: m }),
 
       tasks: [],
       addTask: (t) => set((st) => ({ tasks: [t, ...st.tasks].slice(0, 20) })),
@@ -114,12 +123,13 @@ export const useAppStore = create<AppState>()(
           approveTxHash: undefined,
           txHash: undefined,
           apiKey: undefined,
+          paymentMode: undefined,
           viewingTaskId: undefined,
         }),
     }),
     {
       name: scopedName(APP_STORE_BASE),
-      storage: safeJsonStorage as never,
+      storage: safeJsonStorage() as never,
       partialize: (s) => ({ tasks: s.tasks }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     }
